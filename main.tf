@@ -69,6 +69,9 @@ resource "aws_s3_bucket_acl" "this" {
       }
     }
   }
+
+  # This `depends_on` is to prevent "AccessControlListNotSupported: The bucket does not allow ACLs."
+  depends_on = [aws_s3_bucket_ownership_controls.this]
 }
 
 resource "aws_s3_bucket_website_configuration" "this" {
@@ -531,12 +534,33 @@ data "aws_elb_service_account" "this" {
 data "aws_iam_policy_document" "elb_log_delivery" {
   count = local.create_bucket && var.attach_elb_log_delivery_policy ? 1 : 0
 
+  # Policy for AWS Regions created before August 2022 (e.g. US East (N. Virginia), Asia Pacific (Singapore), Asia Pacific (Sydney), Asia Pacific (Tokyo), Europe (Ireland))
   statement {
     sid = ""
 
     principals {
       type        = "AWS"
       identifiers = data.aws_elb_service_account.this[*].arn
+    }
+
+    effect = "Allow"
+
+    actions = [
+      "s3:PutObject",
+    ]
+
+    resources = [
+      "${aws_s3_bucket.this[0].arn}/*",
+    ]
+  }
+
+  # Policy for AWS Regions created after August 2022 (e.g. Asia Pacific (Hyderabad), Asia Pacific (Melbourne), Europe (Spain), Europe (Zurich), Middle East (UAE))
+  statement {
+    sid = ""
+
+    principals {
+      type        = "Service"
+      identifiers = ["logdelivery.elasticloadbalancing.amazonaws.com"]
     }
 
     effect = "Allow"
